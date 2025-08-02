@@ -1,4 +1,3 @@
-// ======== server.js =========
 const express = require('express');
 const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
@@ -10,12 +9,9 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = 'my_secret_key';
 
-// ✅ Updated CORS: allow localhost & deployed frontend, allow credentials
+// ✅ Allow frontend deployed on Vercel
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'https://health-casre-frontend.vercel.app'
-  ],
+  origin: 'https://health-casre-frontend.vercel.app', // <-- use exact frontend URL
   credentials: true
 }));
 
@@ -23,7 +19,9 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// SQLite DB
+// ========================
+// ✅ SQLite DB init
+// ========================
 const db = new sqlite3.Database('./data.db', (err) => {
   if (err) {
     console.error('Failed to connect to DB:', err.message);
@@ -65,7 +63,7 @@ const db = new sqlite3.Database('./data.db', (err) => {
       )`);
 
       db.get("SELECT COUNT(*) AS count FROM doctors", (err, row) => {
-        if (row.count === 0) {
+        if (!row || row.count === 0) {
           const sampleDoctors = [
             ['Dr. Sarah Johnson', 'Cardiologist', 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?w=300', 'sarah@hospital.com', '555-0101', 12, 4.8],
             ['Dr. Michael Chen', 'Dermatologist', 'https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=300', 'michael@hospital.com', '555-0102', 8, 4.6],
@@ -83,6 +81,9 @@ const db = new sqlite3.Database('./data.db', (err) => {
   }
 });
 
+// ========================
+// ✅ Middleware
+// ========================
 function authenticateToken(req, res, next) {
   const token = req.cookies.token;
   if (!token) return res.status(401).json({ error: 'Unauthorized' });
@@ -93,6 +94,10 @@ function authenticateToken(req, res, next) {
     next();
   });
 }
+
+// ========================
+// ✅ Routes
+// ========================
 
 app.get('/api/health', (req, res) => {
   res.json({ message: 'Server is healthy ✅' });
@@ -124,13 +129,11 @@ app.post('/api/login', (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
-
-    // ✅ Updated: secure:true, sameSite:'None' to allow cross-origin cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: true,
-      sameSite: 'None',
-      maxAge: 3600000,
+      secure: true,         // ✅ must be true in production over HTTPS
+      sameSite: 'None',     // ✅ allow cross-site cookies
+      maxAge: 3600000
     });
 
     res.json({ message: 'Login successful', user: { id: user.id, name: user.name, email: user.email } });
@@ -138,7 +141,11 @@ app.post('/api/login', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('token', {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'None'
+  });
   res.json({ message: 'Logged out successfully' });
 });
 
@@ -160,7 +167,6 @@ app.get('/api/doctors', authenticateToken, (req, res) => {
 
 app.get('/api/doctors/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
-
   db.get("SELECT * FROM doctors WHERE id = ?", [id], (err, row) => {
     if (err) return res.status(500).json({ error: err.message });
     if (!row) return res.status(404).json({ error: 'Doctor not found' });
@@ -199,10 +205,14 @@ app.post('/api/appointments', authenticateToken, (req, res) => {
     });
 });
 
+// ========================
+// ✅ Start server
+// ========================
 app.listen(PORT, () => {
   console.log(`✅ Server running at http://localhost:${PORT}`);
 });
 
+// Handle Ctrl+C (SIGINT)
 process.on('SIGINT', () => {
   db.close(() => {
     console.log('\nDatabase closed. Server shutting down.');
