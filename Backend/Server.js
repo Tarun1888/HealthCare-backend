@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = 'my_secret_key';
 
-// ✅ UPDATED CORS: allow localhost & deployed Vercel frontend
+// ✅ Updated CORS: allow localhost & deployed frontend, allow credentials
 app.use(cors({
   origin: [
     'http://localhost:3000',
@@ -124,10 +124,12 @@ app.post('/api/login', (req, res) => {
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+
+    // ✅ Updated: secure:true, sameSite:'None' to allow cross-origin cookie
     res.cookie('token', token, {
       httpOnly: true,
-      secure: false,
-      sameSite: 'Lax',
+      secure: true,
+      sameSite: 'None',
       maxAge: 3600000,
     });
 
@@ -156,7 +158,6 @@ app.get('/api/doctors', authenticateToken, (req, res) => {
   });
 });
 
-// Get doctor by ID
 app.get('/api/doctors/:id', authenticateToken, (req, res) => {
   const { id } = req.params;
 
